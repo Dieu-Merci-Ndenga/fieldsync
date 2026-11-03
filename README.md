@@ -27,6 +27,28 @@ FieldSync is designed around **local-first writes**, **idempotent operations** a
 - Light/dark themes, accessible controls, and a browser build for quick desktop testing.
 - Fail-fast production configuration, input validation, security headers.
 
+## Quick Start
+
+```bash
+docker compose up -d --build                 # API on :3000 + PostgreSQL
+./demo/conflict-demo.sh                      # offline replay, auto-merge and a conflict, from the shell
+cd mobile && npm install && npx expo start   # then scan the QR code with Expo Go (SDK 58)
+```
+
+No phone at hand? Run `npx expo start --web` and open <http://localhost:8081> (see [Browser](#browser-expo-web)).
+
+## Design Decisions
+
+| Decision                                  | Rationale                                                                                              |
+| ----------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| Write-ahead local outbox                  | An edit is durable before any network call, so a crash or dead zone never loses work.                  |
+| Idempotent operations (UUID + ledger)     | Exactly-once delivery is impossible; at-least-once plus a `processed_ops` ledger is safe and simple.   |
+| Field-level three-way merge               | Different fields edited by different people merge silently; only real collisions reach the user.       |
+| Conflicts are parked, never auto-resolved | "No silent overwrite" is the product promise; the user chooses _keep mine_ or _keep theirs_.           |
+| Tombstones instead of hard deletes        | Deletes sync, merge and conflict like any edit, and can be undone.                                     |
+| Photos are a separate queue               | A broken or large upload can never block data sync; permanent rejections are parked with Retry/Remove. |
+| Pure, dependency-free `SyncEngine`        | Runs against an in-memory store and a fake server in tests, with the real merge code.                  |
+
 ## Architecture
 
 ```text
@@ -58,7 +80,11 @@ FieldSync is designed around **local-first writes**, **idempotent operations** a
 
 ```text
 backend/    NestJS API (src/sync/merge.ts holds the merge algorithm)
-mobile/     Expo app (src/core = sync engine, src/db = SQLite store)
+mobile/     Expo app
+  src/core      sync engine, store contracts, in-memory store (framework-free, unit tested)
+  src/db        SQLite store (native) and localStorage store (web)
+  src/platform  native/web adapters: binary upload, photo storage, settings
+  src/ui        themed components and screens
 demo/       Scripted reproduction of offline replay, auto-merge and conflict
 ```
 
@@ -158,7 +184,9 @@ FieldSync is a reference implementation, not a complete field-service platform.
 - **Photos:** stored on the API's local volume; no thumbnails, compression pipeline or object storage. Pulled inspections show remote photos only while online.
 - **No background sync:** sync runs while the app is open.
 - **Device data is not encrypted** at rest.
-- **Not load tested.** The mobile UI layer and SQLite store have no automated tests and the app has not been run on a physical device.
+- **Test coverage:** the sync engine and server merge/API are tested; the React Native UI and the SQLite adapter have no automated tests. The app has been exercised manually in Expo Go on an Android device and in a desktop browser, not on iOS.
+- **Web build:** `localStorage` persistence and data-URL photos are quota-limited; it is for development only.
+- **Not load tested.**
 
 ## Changelog
 
@@ -169,6 +197,16 @@ FieldSync is a reference implementation, not a complete field-service platform.
 - **Security:** bearer `API_TOKEN` (required in production), request validation, photo content checks, security headers, non-root container.
 - **Tooling:** CI with PostgreSQL service, oxlint, Prettier, demo script, contribution and security policies.
 
+## Troubleshooting
+
+| Symptom                            | Likely cause and fix                                                                                        |
+| ---------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| Phone shows "something went wrong" | The app cannot reach the API. Use a URL reachable from the phone (LAN IP or a public tunnel) in _Settings_. |
+| `401` from the API                 | The API token in _Settings_ does not match `API_TOKEN`.                                                     |
+| Browser blocks requests (CORS)     | Set `CORS_ORIGIN` to the web origin, or `*` for local demos only.                                           |
+| A photo shows "Upload failed"      | The server rejected the file (type, size or content). Use _Retry_ or _Remove_; data sync is unaffected.     |
+| Everything works but nothing syncs | _Simulate offline_ is enabled in _Settings_.                                                                |
+
 ## Contributing and License
 
-See [CONTRIBUTING.md](CONTRIBUTING.md). Released under the [MIT License](LICENSE).
+See [CONTRIBUTING.md](CONTRIBUTING.md) and the [Code of Conduct](CODE_OF_CONDUCT.md). Released under the [MIT License](LICENSE).

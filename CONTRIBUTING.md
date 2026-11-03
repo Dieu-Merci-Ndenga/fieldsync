@@ -47,6 +47,13 @@ Remove secrets, tokens and personal data from logs and examples.
 
 5. Open a pull request describing the change, motivation, tests performed and trade-offs. If a check cannot be run, say why.
 
+## Code Style and Commits
+
+- TypeScript strict mode; formatting by Prettier and linting by oxlint (`npm run format`, `npm run lint`).
+- Keep the sync engine in `mobile/src/core` free of React Native and Expo imports so it stays testable in Node.
+- Platform-specific code goes in `mobile/src/platform` (or a `.web.ts` sibling file).
+- Use clear, imperative commit messages that explain the _why_.
+
 ## Pull Request Guidelines
 
 - Keep changes focused and easy to review.
@@ -54,6 +61,8 @@ Remove secrets, tokens and personal data from logs and examples.
 - Include regression tests for bug fixes (the sync engine has an in-memory store and fake server in `mobile/src/core/engine.test.ts`).
 - Document architectural changes and reliability trade-offs in the README.
 - Never introduce secrets, credentials or unrelated changes.
+- UI changes: include a screenshot or short recording and check both light and dark themes.
+- CI (backend tests on PostgreSQL, mobile typecheck and tests, lint, format, Docker health check) must pass.
 
 For significant architectural changes (for example the merge strategy or wire protocol), open an issue first.
 
@@ -62,6 +71,8 @@ For significant architectural changes (for example the merge strategy or wire pr
 - An edit is persisted locally **before** any network call.
 - Every operation has a stable UUID and replaying it is idempotent.
 - A conflicting edit is never applied silently; the user decides.
+- Deletes are tombstones (`deleted: true` or a `null` field), never physical removal.
+- A failing photo upload must never block data synchronisation.
 - The server's merge logic (`backend/src/sync/merge.ts`) is shared with the mobile tests, keep it dependency-free.
 
 ## Security
