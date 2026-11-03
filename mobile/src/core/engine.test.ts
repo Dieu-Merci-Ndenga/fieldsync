@@ -71,6 +71,32 @@ class FakeServer {
   }
 }
 
+describe('SyncEngine photo failures', () => {
+  it('keeps syncing data and retries when a photo upload fails with an HTTP error', async () => {
+    const server = new FakeServer();
+    const store = new MemoryStore();
+    const base = server.api('alice');
+    let fail = true;
+    const engine = new SyncEngine(store, {
+      ...base,
+      uploadPhoto: async () => {
+        if (fail) throw new Error('photo upload HTTP 404');
+      },
+    });
+    const id = await engine.createInspection({ title: 'T' });
+    await engine.addPhoto(id, 'file:///p.jpg', 'image/jpeg');
+    const r = await engine.sync();
+    expect(r.status).toBe('error');
+    expect(r.error).toContain('HTTP 404');
+    expect(store.outbox.size).toBe(0);
+    expect(server.data.get(id)!.version).toBe(2);
+    expect((await store.getInspection(id))!.syncState).toBe('synced');
+    fail = false;
+    expect((await engine.sync()).status).toBe('idle');
+    expect([...store.photos.values()][0].uploaded).toBe(true);
+  });
+});
+
 describe('SyncEngine', () => {
   let server: FakeServer;
   let a: SyncEngine, b: SyncEngine, aStore: MemoryStore, bStore: MemoryStore;

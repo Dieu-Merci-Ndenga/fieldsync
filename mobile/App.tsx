@@ -7,6 +7,7 @@ import {
   Button,
   FlatList,
   Image,
+  Pressable,
   SafeAreaView,
   ScrollView,
   StyleSheet,
@@ -20,6 +21,7 @@ import { createApi } from './src/api';
 import { SyncEngine, SyncReport } from './src/core/engine';
 import { ChecklistItem, HistoryItem, LocalInspection, LocalPhoto, OutboxOp, Store } from './src/core/types';
 import { openStore } from './src/db/sqliteStore';
+import { PhotoSource, PhotoViewer } from './src/ui/PhotoViewer';
 
 const DEFAULT_URL = process.env.EXPO_PUBLIC_API_URL ?? 'http://10.0.2.2:3000';
 const STATUSES = ['draft', 'in_progress', 'completed'];
@@ -126,6 +128,7 @@ export default function App() {
           engine={engine}
           api={createApi(url, user, token)}
           url={url}
+          auth={{ 'x-user-id': user, ...(token ? { Authorization: `Bearer ${token}` } : {}) }}
           online={!offline}
           onChange={reload}
           onBack={() => {
@@ -192,11 +195,13 @@ function Detail(props: {
   engine: SyncEngine;
   api: ReturnType<typeof createApi>;
   url: string;
+  auth: Record<string, string>;
   online: boolean;
   onChange: () => void;
   onBack: () => void;
 }) {
-  const { id, store, engine, api, url, online, onChange, onBack } = props;
+  const { id, store, engine, api, url, auth, online, onChange, onBack } = props;
+  const [viewer, setViewer] = useState<PhotoSource | null>(null);
   const [insp, setInsp] = useState<LocalInspection | null>(null);
   const [photos, setPhotos] = useState<LocalPhoto[]>([]);
   const [ops, setOps] = useState<OutboxOp[]>([]);
@@ -361,11 +366,21 @@ function Detail(props: {
       <View style={s.row}>
         {photoIds.map((pid) => {
           const local = photos.find((p) => p.id === pid);
-          const uri = local?.uri ?? (online ? `${url}/photos/${pid}` : null);
+          const source: PhotoSource | null = local
+            ? { uri: local.uri }
+            : online
+              ? { uri: `${url}/photos/${pid}`, headers: auth }
+              : null;
           return (
             <View key={pid}>
-              {uri ? (
-                <Image source={{ uri }} style={s.photo} />
+              {source ? (
+                <Pressable
+                  accessibilityRole="imagebutton"
+                  accessibilityLabel="Open photo full screen"
+                  onPress={() => setViewer(source)}
+                >
+                  <Image source={source} style={s.photo} />
+                </Pressable>
               ) : (
                 <View style={[s.photo, { backgroundColor: '#ccc' }]} />
               )}
@@ -376,6 +391,8 @@ function Detail(props: {
           );
         })}
       </View>
+
+      <PhotoViewer source={viewer} onClose={() => setViewer(null)} />
 
       <Text style={s.h1}>History</Text>
       <Button title="Load change history" onPress={loadHistory} />

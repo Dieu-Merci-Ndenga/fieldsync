@@ -17,6 +17,13 @@ export function configure(app: NestExpressApplication) {
     res.setHeader('Cache-Control', 'no-store');
     next();
   });
+  if (process.env.NODE_ENV !== 'test') {
+    const log = new Logger('HTTP');
+    app.use((req: express.Request, res: express.Response, next: express.NextFunction) => {
+      res.on('finish', () => log.log(`${req.method} ${req.path} ${res.statusCode}`));
+      next();
+    });
+  }
   app.use('/photos', express.raw({ type: ['image/jpeg', 'image/png'], limit: '15mb' }));
   app.enableShutdownHooks();
 }

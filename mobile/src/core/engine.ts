@@ -126,10 +126,17 @@ export class SyncEngine {
     let pushed = 0;
     try {
       pushed = await this.pushOps();
-      await this.uploadPhotos();
+      const photoFailures = await this.uploadPhotos();
       await this.pull();
       const conflicts = (await this.store.listOutbox()).filter((o) => o.conflicts).length;
-      const r: SyncReport = { status: 'idle', pushed, conflicts };
+      const r: SyncReport = photoFailures.length
+        ? {
+            status: 'error',
+            pushed,
+            conflicts,
+            error: `${photoFailures.length} photo(s) not uploaded yet, will retry (${photoFailures[0]})`,
+          }
+        : { status: 'idle', pushed, conflicts };
       this.emit(r);
       return r;
     } catch (e) {
@@ -186,12 +193,20 @@ export class SyncEngine {
     return applied;
   }
 
-  private async uploadPhotos() {
+  /** A failing photo must not block data sync: network errors abort, server errors are reported and retried later. */
+  private async uploadPhotos(): Promise<string[]> {
+    const failures: string[] = [];
     for (const p of await this.store.listPhotos()) {
       if (p.uploaded) continue;
-      await this.api.uploadPhoto(p);
-      await this.store.markPhotoUploaded(p.id);
+      try {
+        await this.api.uploadPhoto(p);
+        await this.store.markPhotoUploaded(p.id);
+      } catch (e) {
+        if (isNetworkError(e)) throw e;
+        failures.push((e as Error).message);
+      }
     }
+    return failures;
   }
 
   private async pull() {
