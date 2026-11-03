@@ -5,6 +5,13 @@
 FieldSync lets technicians create inspections, checklists and photo reports with no connectivity, keeps them durably on the device, and synchronises them later without losing data or silently overwriting a colleague's changes.
 
 [![CI](https://github.com/Dieu-Merci-Ndenga/fieldsync/actions/workflows/ci.yml/badge.svg)](https://github.com/Dieu-Merci-Ndenga/fieldsync/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+
+<p align="center">
+  <a href="https://github.com/Dieu-Merci-Ndenga/fieldsync">
+    <img src="mobile/src/img/FieldSync_OpenGraph.png" alt="Relay - Event-Driven Webhook Engine" width="100%">
+  </a>
+</p>
 
 ## Why FieldSync Exists
 
