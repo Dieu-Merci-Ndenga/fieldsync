@@ -1,4 +1,4 @@
-import { Api, Fields, LocalInspection, LocalPhoto, OutboxOp, PhotoMeta, Store, SyncState } from './types';
+import { Api, Fields, LocalInspection, OutboxOp, PhotoMeta, Store, SyncState } from './types';
 
 export type SyncStatus = 'idle' | 'syncing' | 'offline' | 'error';
 
@@ -20,7 +20,11 @@ export class SyncEngine {
   private listeners = new Set<(r: SyncReport) => void>();
   last: SyncReport = { status: 'idle', pushed: 0, conflicts: 0 };
 
-  constructor(private store: Store, private api: Api, private now = () => Date.now()) {}
+  constructor(
+    private store: Store,
+    private api: Api,
+    private now = () => Date.now(),
+  ) {}
 
   subscribe(fn: (r: SyncReport) => void) {
     this.listeners.add(fn);
@@ -47,10 +51,22 @@ export class SyncEngine {
     const syncState: SyncState = insp.syncState === 'conflict' ? 'conflict' : 'pending';
     // Persist the edit and its outbox entry together-ish: op first, so a crash never loses an edit.
     await this.store.addOp({
-      opId: uuid(), inspectionId: id, baseVersion: insp.baseVersion, patch, force: false,
-      createdAt: this.now(), attempts: 0, lastError: null, conflicts: null,
+      opId: uuid(),
+      inspectionId: id,
+      baseVersion: insp.baseVersion,
+      patch,
+      force: false,
+      createdAt: this.now(),
+      attempts: 0,
+      lastError: null,
+      conflicts: null,
     });
-    await this.store.saveInspection({ ...insp, fields: { ...insp.fields, ...patch }, syncState, updatedAt: this.now() });
+    await this.store.saveInspection({
+      ...insp,
+      fields: { ...insp.fields, ...patch },
+      syncState,
+      updatedAt: this.now(),
+    });
   }
 
   async addPhoto(inspectionId: string, uri: string, mime: string, caption = ''): Promise<string> {
@@ -118,7 +134,10 @@ export class SyncEngine {
       return r;
     } catch (e) {
       const r: SyncReport = {
-        status: isNetworkError(e) ? 'offline' : 'error', pushed, conflicts: 0, error: (e as Error).message,
+        status: isNetworkError(e) ? 'offline' : 'error',
+        pushed,
+        conflicts: 0,
+        error: (e as Error).message,
       };
       this.emit(r);
       return r;
@@ -137,7 +156,13 @@ export class SyncEngine {
     if (!ready.length) return 0;
 
     const results = await this.api.push(
-      ready.map(({ opId, inspectionId, baseVersion, patch, force }) => ({ opId, inspectionId, baseVersion, patch, force })),
+      ready.map(({ opId, inspectionId, baseVersion, patch, force }) => ({
+        opId,
+        inspectionId,
+        baseVersion,
+        patch,
+        force,
+      })),
     );
     let applied = 0;
     const touched = new Set<string>();
@@ -147,7 +172,8 @@ export class SyncEngine {
       touched.add(op.inspectionId);
       if (!r || r.status === 'error' || stopped.has(op.inspectionId)) {
         stopped.add(op.inspectionId);
-        if (r?.status === 'error') await this.store.updateOp({ ...op, attempts: op.attempts + 1, lastError: r.message });
+        if (r?.status === 'error')
+          await this.store.updateOp({ ...op, attempts: op.attempts + 1, lastError: r.message });
       } else if (r.status === 'applied') {
         await this.store.removeOp(op.opId);
         applied++;
@@ -185,7 +211,11 @@ export class SyncEngine {
         }
         const syncState: SyncState = mine.some((o) => o.conflicts) ? 'conflict' : mine.length ? 'pending' : 'synced';
         const next: LocalInspection = {
-          id: s.id, fields, baseVersion: s.version, syncState, updatedAt: local?.updatedAt ?? this.now(),
+          id: s.id,
+          fields,
+          baseVersion: s.version,
+          syncState,
+          updatedAt: local?.updatedAt ?? this.now(),
         };
         await this.store.saveInspection(next);
       }

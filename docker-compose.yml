@@ -5,21 +5,24 @@ services:
       POSTGRES_USER: fieldsync
       POSTGRES_PASSWORD: fieldsync
       POSTGRES_DB: fieldsync
-    ports: ["5432:5432"]
+    ports: ['127.0.0.1:5432:5432']
     volumes: [pgdata:/var/lib/postgresql/data]
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U fieldsync"]
+      test: ['CMD-SHELL', 'pg_isready -U fieldsync']
       interval: 3s
       retries: 10
   api:
     build: ./backend
     environment:
       DATABASE_URL: postgres://fieldsync:fieldsync@db:5432/fieldsync
+      # Local demo token; override with API_TOKEN=... docker compose up
+      API_TOKEN: ${API_TOKEN:-dev-token-change-me}
       UPLOAD_DIR: /data/uploads
-    ports: ["3000:3000"]
+    ports: ['3000:3000']
     depends_on:
       db: { condition: service_healthy }
     volumes: [uploads:/data/uploads]
+    restart: unless-stopped
 volumes:
   pgdata:
   uploads:

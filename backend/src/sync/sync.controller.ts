@@ -1,5 +1,6 @@
 import { BadRequestException, Body, Controller, Get, Headers, Param, ParseUUIDPipe, Post, Query } from '@nestjs/common';
-import { PushOp, SyncService } from './sync.service';
+import { SyncService } from './sync.service';
+import { validateOps } from './validation';
 
 @Controller()
 export class SyncController {
@@ -11,15 +12,8 @@ export class SyncController {
   }
 
   @Post('sync/push')
-  push(@Headers('x-user-id') userId: string, @Body() body: { ops: PushOp[] }) {
-    if (!userId) throw new BadRequestException('x-user-id header required');
-    if (!Array.isArray(body?.ops)) throw new BadRequestException('ops must be an array');
-    for (const op of body.ops) {
-      if (!op?.opId || !op.inspectionId || typeof op.patch !== 'object' || op.patch === null) {
-        throw new BadRequestException('invalid operation');
-      }
-    }
-    return this.sync.push(userId, body.ops.map((o) => ({ ...o, baseVersion: o.baseVersion ?? 0 })));
+  push(@Headers('x-user-id') userId: string, @Body() body: { ops?: unknown }) {
+    return this.sync.push(userId, validateOps(body?.ops));
   }
 
   @Get('sync/pull')

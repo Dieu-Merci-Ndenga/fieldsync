@@ -40,21 +40,52 @@ d('sync API (e2e)', () => {
     expect(r.body[0]).toMatchObject({ status: 'conflict', serverVersion: 3 });
     expect(r.body[0].conflicts[0]).toMatchObject({ field: 'notes', mine: 'alice', theirs: 'bob' });
 
-    r = await push('alice', [{ opId: conflictOp, inspectionId: id, baseVersion: 3, patch: { notes: 'alice' }, force: true }]);
+    r = await push('alice', [
+      { opId: conflictOp, inspectionId: id, baseVersion: 3, patch: { notes: 'alice' }, force: true },
+    ]);
     expect(r.body[0]).toMatchObject({ status: 'applied', version: 4 });
 
     const h = await request(app.getHttpServer()).get(`/inspections/${id}/history`);
     expect(h.body.map((e: { userId: string }) => e.userId)).toEqual(['alice', 'bob', 'alice', 'alice']);
 
     const pull = await request(app.getHttpServer()).get('/sync/pull?cursor=0');
-    expect(pull.body.inspections.find((i: { id: string }) => i.id === id).fields).toMatchObject({ title: 'Pump A', notes: 'alice' });
+    expect(pull.body.inspections.find((i: { id: string }) => i.id === id).fields).toMatchObject({
+      title: 'Pump A',
+      notes: 'alice',
+    });
+  });
+
+  it('rejects invalid requests and sets security headers', async () => {
+    const http = request(app.getHttpServer());
+    await http.post('/sync/push').send({ ops: [] }).expect(401);
+    await http
+      .post('/sync/push')
+      .set('x-user-id', 'a')
+      .send({ ops: [{ opId: 'x' }] })
+      .expect(400);
+    const h = await http.get('/health').expect(200);
+    expect(h.headers['x-content-type-options']).toBe('nosniff');
+    expect(h.headers['x-powered-by']).toBeUndefined();
+  });
+
+  it('rejects a photo whose bytes are not an image', async () => {
+    await request(app.getHttpServer())
+      .put(`/photos/${randomUUID()}?inspectionId=${randomUUID()}`)
+      .set('x-user-id', 'alice')
+      .set('Content-Type', 'image/png')
+      .send(Buffer.from('<html>'))
+      .expect(400);
   });
 
   it('uploads and serves a photo', async () => {
     const pid = randomUUID();
     const bytes = Buffer.from([0xff, 0xd8, 0xff, 0xd9]);
-    await request(app.getHttpServer()).put(`/photos/${pid}?inspectionId=${randomUUID()}`)
-      .set('x-user-id', 'alice').set('Content-Type', 'image/jpeg').send(bytes).expect(200);
+    await request(app.getHttpServer())
+      .put(`/photos/${pid}?inspectionId=${randomUUID()}`)
+      .set('x-user-id', 'alice')
+      .set('Content-Type', 'image/jpeg')
+      .send(bytes)
+      .expect(200);
     const g = await request(app.getHttpServer()).get(`/photos/${pid}`).expect(200);
     expect(g.headers['content-type']).toContain('image/jpeg');
   });

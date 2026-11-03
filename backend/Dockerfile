@@ -12,5 +12,8 @@ ENV NODE_ENV=production
 COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/dist ./dist
 COPY package.json ./
+RUN mkdir -p /data/uploads && chown -R node:node /data
+USER node
 EXPOSE 3000
+HEALTHCHECK --interval=10s --timeout=3s --retries=5 CMD wget -qO- http://127.0.0.1:3000/health || exit 1
 CMD ["node", "dist/src/main.js"]

@@ -24,13 +24,28 @@ class FakeServer {
             throw new TypeError('Network request failed');
           }
           this.processed++;
-          if (this.done.has(op.opId)) { out.push(this.done.get(op.opId)!); continue; }
+          if (this.done.has(op.opId)) {
+            out.push(this.done.get(op.opId)!);
+            continue;
+          }
           const cur = this.data.get(op.inspectionId) ?? { fields: {}, version: 0 };
-          const hist = this.log.filter((l) => l.inspectionId === op.inspectionId).map((l) => ({ version: l.version, changes: l.changes, userId: l.userId }));
+          const hist = this.log
+            .filter((l) => l.inspectionId === op.inspectionId)
+            .map((l) => ({ version: l.version, changes: l.changes, userId: l.userId }));
           const r = op.force
             ? ({ status: 'applied', fields: { ...cur.fields, ...op.patch }, applied: op.patch, merged: true } as const)
-            : mergePatch({ serverFields: cur.fields, serverVersion: cur.version, baseVersion: op.baseVersion, patch: op.patch, history: hist, userId });
-          if (r.status === 'conflict') { out.push({ opId: op.opId, status: 'conflict', serverVersion: cur.version, conflicts: r.conflicts }); continue; }
+            : mergePatch({
+                serverFields: cur.fields,
+                serverVersion: cur.version,
+                baseVersion: op.baseVersion,
+                patch: op.patch,
+                history: hist,
+                userId,
+              });
+          if (r.status === 'conflict') {
+            out.push({ opId: op.opId, status: 'conflict', serverVersion: cur.version, conflicts: r.conflicts });
+            continue;
+          }
           const version = cur.version + 1;
           this.data.set(op.inspectionId, { fields: r.fields, version });
           this.log.push({ inspectionId: op.inspectionId, version, changes: r.applied, userId });
@@ -42,9 +57,15 @@ class FakeServer {
       },
       pull: async () => {
         if (!this.online) throw new TypeError('Network request failed');
-        return { cursor: String(this.log.length), more: false, inspections: [...this.data].map(([id, v]) => ({ id, ...structuredClone(v) })) };
+        return {
+          cursor: String(this.log.length),
+          more: false,
+          inspections: [...this.data].map(([id, v]) => ({ id, ...structuredClone(v) })),
+        };
       },
-      uploadPhoto: async (_p: LocalPhoto) => { if (!this.online) throw new TypeError('Network request failed'); },
+      uploadPhoto: async (_p: LocalPhoto) => {
+        if (!this.online) throw new TypeError('Network request failed');
+      },
       history: async () => [],
     };
   }
@@ -55,7 +76,8 @@ describe('SyncEngine', () => {
   let a: SyncEngine, b: SyncEngine, aStore: MemoryStore, bStore: MemoryStore;
   beforeEach(() => {
     server = new FakeServer();
-    aStore = new MemoryStore(); bStore = new MemoryStore();
+    aStore = new MemoryStore();
+    bStore = new MemoryStore();
     a = new SyncEngine(aStore, server.api('alice'));
     b = new SyncEngine(bStore, server.api('bob'));
   });
@@ -83,7 +105,8 @@ describe('SyncEngine', () => {
     await a.edit(id, { notes: 'two' });
     server.failAfter = 1;
     expect((await a.sync()).status).toBe('offline');
-    server.online = true; server.failAfter = null;
+    server.online = true;
+    server.failAfter = null;
     await a.sync();
     expect(aStore.outbox.size).toBe(0);
     expect(server.data.get(id)!.version).toBe(3);
@@ -125,10 +148,12 @@ describe('SyncEngine', () => {
 
   it('keep theirs drops the local edit', async () => {
     const id = await a.createInspection({ notes: '' });
-    await a.sync(); await b.sync();
+    await a.sync();
+    await b.sync();
     await a.edit(id, { notes: 'A' });
     await b.edit(id, { notes: 'B' });
-    await a.sync(); await b.sync();
+    await a.sync();
+    await b.sync();
     await b.resolveKeepTheirs((await bStore.listOutbox())[0].opId);
     await b.sync();
     expect(server.data.get(id)!.fields.notes).toBe('A');

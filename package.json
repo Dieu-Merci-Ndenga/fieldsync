@@ -1,0 +1,28 @@
+{
+  "name": "fieldsync",
+  "version": "1.0.0",
+  "description": "Offline-first inspection app: React Native + NestJS + PostgreSQL",
+  "scripts": {
+    "test": "npm test --prefix backend && npm test --prefix mobile",
+    "test:e2e": "DATABASE_URL=${DATABASE_URL:-postgres://fieldsync:fieldsync@localhost:5432/fieldsync} npm test --prefix backend",
+    "build": "npm run build --prefix backend && npm run typecheck --prefix mobile",
+    "lint": "oxlint backend/src backend/test mobile/src mobile/App.tsx",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Dieu-Merci-Ndenga/fieldsync.git"
+  },
+  "license": "MIT",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/Dieu-Merci-Ndenga/fieldsync/issues"
+  },
+  "homepage": "https://github.com/Dieu-Merci-Ndenga/fieldsync#readme",
+  "devDependencies": {
+    "oxlint": "^1.90.0",
+    "prettier": "^3.9.10"
+  },
+  "private": true
+}

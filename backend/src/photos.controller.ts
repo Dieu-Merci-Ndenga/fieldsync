@@ -1,4 +1,16 @@
-import { BadRequestException, Controller, Get, Headers, NotFoundException, Param, ParseUUIDPipe, Put, Query, Req, Res } from '@nestjs/common';
+import {
+  BadRequestException,
+  Controller,
+  Get,
+  Headers,
+  NotFoundException,
+  Param,
+  ParseUUIDPipe,
+  Put,
+  Query,
+  Req,
+  Res,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Request, Response } from 'express';
 import { promises as fs } from 'fs';
@@ -24,10 +36,16 @@ export class PhotosController {
     const mime = (req.headers['content-type'] ?? '').split(';')[0];
     if (!MIMES[mime]) throw new BadRequestException('only image/jpeg or image/png');
     if (!Buffer.isBuffer(req.body) || !req.body.length) throw new BadRequestException('empty body');
+    const b = req.body as Buffer;
+    const magicOk =
+      mime === 'image/jpeg'
+        ? b[0] === 0xff && b[1] === 0xd8
+        : b.subarray(0, 4).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47]));
+    if (!magicOk) throw new BadRequestException('file content does not match its image type');
     await fs.mkdir(DIR, { recursive: true });
     const path = join(DIR, `${id}.${MIMES[mime]}`);
     await fs.writeFile(path, req.body);
-    await this.photos.save({ id, inspectionId, mime, path, uploadedBy: userId ?? 'unknown' });
+    await this.photos.save({ id, inspectionId, mime, path, uploadedBy: userId });
     return { id, size: req.body.length };
   }
 

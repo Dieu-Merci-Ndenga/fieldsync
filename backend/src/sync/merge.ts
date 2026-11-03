@@ -42,7 +42,8 @@ export function mergePatch(input: MergeInput): MergeResult {
 
   const changedSince = new Set<string>();
   for (const h of history) {
-    if (h.version > baseVersion && !(userId && h.userId === userId)) Object.keys(h.changes).forEach((k) => changedSince.add(k));
+    if (h.version > baseVersion && !(userId && h.userId === userId))
+      Object.keys(h.changes).forEach((k) => changedSince.add(k));
   }
 
   const conflicts: FieldConflict[] = [];

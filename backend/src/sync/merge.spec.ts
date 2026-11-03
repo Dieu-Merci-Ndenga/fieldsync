@@ -25,9 +25,19 @@ describe('mergePatch', () => {
     });
   });
 
-  it('ignores the author\'s own earlier edits', () => {
-    const h = [{ version: 1, changes: { notes: 'x' }, userId: 'a' }, { version: 2, changes: { notes: 'y' }, userId: 'a' }];
-    const r = mergePatch({ serverFields: { notes: 'y' }, serverVersion: 2, baseVersion: 0, patch: { notes: 'z' }, history: h, userId: 'a' });
+  it("ignores the author's own earlier edits", () => {
+    const h = [
+      { version: 1, changes: { notes: 'x' }, userId: 'a' },
+      { version: 2, changes: { notes: 'y' }, userId: 'a' },
+    ];
+    const r = mergePatch({
+      serverFields: { notes: 'y' },
+      serverVersion: 2,
+      baseVersion: 0,
+      patch: { notes: 'z' },
+      history: h,
+      userId: 'a',
+    });
     expect(r.status).toBe('applied');
   });
 
