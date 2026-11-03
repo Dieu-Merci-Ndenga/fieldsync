@@ -1,40 +1,22 @@
 :root {
-  --bg: #fbfbfc;
-  --surface: #ffffff;
-  --alt: #f2f4f7;
-  --border: #e4e7ec;
-  --text: #0f1419;
-  --muted: #5b6676;
-  --primary: #2563eb;
-  --on-primary: #fff;
-  --ok: #16803c;
-  --ok-bg: #e3f5ea;
-  --warn: #a15c07;
-  --warn-bg: #fdf0d8;
-  --bad: #c62828;
-  --bad-bg: #fde7e7;
+  --bg: #0d1117;
+  --surface: #131a23;
+  --alt: #10161e;
+  --border: #212b38;
+  --text: #f8fafc;
+  --muted: #94a3b8;
+  --primary: #10b981;
+  --on-primary: #04130d;
+  --accent: #00f0ff;
+  --ok: #10b981;
+  --ok-bg: rgb(16 185 129 / 14%);
+  --warn: #f5b942;
+  --warn-bg: rgb(245 185 66 / 14%);
+  --bad: #ff6b6b;
+  --bad-bg: rgb(255 107 107 / 14%);
   --radius: 16px;
-  --shadow: 0 1px 2px rgb(16 24 40 / 6%), 0 12px 32px rgb(16 24 40 / 8%);
-  color-scheme: light dark;
-}
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #0b0e13;
-    --surface: #131820;
-    --alt: #1b212c;
-    --border: #262e3b;
-    --text: #eef1f5;
-    --muted: #98a3b3;
-    --primary: #6ea0ff;
-    --on-primary: #0b1220;
-    --ok: #5ed38a;
-    --ok-bg: #12301e;
-    --warn: #f0b958;
-    --warn-bg: #35280e;
-    --bad: #ff8a80;
-    --bad-bg: #3a1616;
-    --shadow: 0 1px 2px rgb(0 0 0 / 40%), 0 12px 32px rgb(0 0 0 / 35%);
-  }
+  --shadow: 0 1px 2px rgb(0 0 0 / 40%), 0 16px 40px rgb(0 0 0 / 35%);
+  color-scheme: dark;
 }
 * {
   box-sizing: border-box;
@@ -101,6 +83,9 @@ header.nav {
   font-weight: 700;
   text-decoration: none;
   letter-spacing: -0.01em;
+}
+.brand .sync {
+  color: var(--primary);
 }
 .brand img {
   width: 26px;
@@ -199,7 +184,10 @@ h1 {
 }
 h1 em {
   font-style: normal;
-  color: var(--primary);
+  background: linear-gradient(90deg, var(--primary), var(--accent));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
 }
 .lead {
   font-size: 1.15rem;
@@ -233,8 +221,11 @@ h1 em {
   margin-inline: auto;
   border-radius: 40px;
   padding: 10px;
-  background: var(--text);
-  box-shadow: var(--shadow);
+  background: #1a232f;
+  border: 1px solid var(--border);
+  box-shadow:
+    var(--shadow),
+    0 0 80px rgb(16 185 129 / 12%);
 }
 .screen {
   background: var(--bg);
@@ -410,7 +401,7 @@ h2 {
   height: 20px;
 }
 section.alt .card {
-  background: var(--bg);
+  background: var(--surface);
 }
 
 .steps {
@@ -493,8 +484,7 @@ section.alt .card {
 }
 
 pre {
-  margin-top: 32px;
-  background: #0b0e13;
+  background: #090c11;
   color: #e6edf3;
   border-radius: var(--radius);
   padding: 22px;
@@ -587,4 +577,11 @@ footer a:hover {
   .s-banner {
     transition: none;
   }
+}
+
+.hero {
+  background: radial-gradient(60% 50% at 75% 20%, rgb(16 185 129 / 10%), transparent 70%);
+}
+.icon {
+  color: var(--accent);
 }

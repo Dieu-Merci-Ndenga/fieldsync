@@ -7,7 +7,7 @@ const light = {
   border: '#dfe2e7',
   text: '#14181f',
   muted: '#5f6b7a',
-  primary: '#2563eb',
+  primary: '#059669',
   onPrimary: '#ffffff',
   success: '#16803c',
   successBg: '#e3f5ea',
@@ -20,14 +20,14 @@ const light = {
 };
 
 const dark: typeof light = {
-  bg: '#0e1116',
-  surface: '#171b22',
+  bg: '#0d1117',
+  surface: '#131a23',
   surfaceAlt: '#212733',
   border: '#2b3341',
   text: '#eef1f5',
   muted: '#9aa6b6',
-  primary: '#6ea0ff',
-  onPrimary: '#0b1220',
+  primary: '#10b981',
+  onPrimary: '#04130d',
   success: '#5ed38a',
   successBg: '#12301e',
   warning: '#f0b958',

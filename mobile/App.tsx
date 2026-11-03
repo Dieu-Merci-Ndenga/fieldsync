@@ -166,7 +166,7 @@ function Root() {
       <View style={{ flex: 1, width: '100%', maxWidth: 760, alignSelf: 'center' }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: space.lg, paddingTop: space.sm }}>
           <Text accessibilityRole="header" style={{ flex: 1, color: t.text, fontSize: 26, fontWeight: '800' }}>
-            FieldSync
+            Field<Text style={{ color: t.primary }}>Sync</Text>
           </Text>
           <IconButton icon="sync-outline" label="Sync now" onPress={sync} />
           <IconButton icon="settings-outline" label="Settings" onPress={() => setShowSettings(true)} />
