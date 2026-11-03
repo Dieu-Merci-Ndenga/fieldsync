@@ -1,0 +1,8 @@
+{
+    "chat.tools.terminal.autoApprove": {
+        "/^mkdir -p /workspaces/fieldsync/backend/src/sync$/": {
+            "approve": true,
+            "matchCommandLine": true
+        }
+    }
+}

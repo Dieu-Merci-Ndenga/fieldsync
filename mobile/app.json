@@ -1,0 +1,12 @@
+{
+  "expo": {
+    "name": "FieldSync",
+    "slug": "fieldsync",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "plugins": [
+      ["expo-image-picker", { "cameraPermission": "FieldSync needs the camera to attach inspection photos." }],
+      "expo-sqlite"
+    ]
+  }
+}
