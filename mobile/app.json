@@ -18,6 +18,12 @@
       "bundler": "metro",
       "output": "single"
     },
-    "userInterfaceStyle": "automatic"
+    "userInterfaceStyle": "automatic",
+    "android": {
+      "package": "dev.dieumerci.fieldsync"
+    },
+    "ios": {
+      "bundleIdentifier": "dev.dieumerci.fieldsync"
+    }
   }
 }

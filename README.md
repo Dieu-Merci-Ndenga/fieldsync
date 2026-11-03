@@ -149,6 +149,16 @@ cd mobile && npx expo start --web     # http://localhost:8081
 
 The web build uses `localStorage` instead of SQLite and stores photos as data URLs (quota-limited), so it is a development convenience, not a production target. The API must allow the origin (`CORS_ORIGIN=*` is the compose default for local demos). Settings are stored in the device secure store (native) or `localStorage` (web).
 
+### Android APK
+
+```bash
+cd mobile
+npm install -g eas-cli && eas login
+EXPO_PUBLIC_API_URL=https://your-api.example.com EXPO_PUBLIC_API_TOKEN=<token> eas build -p android --profile preview
+```
+
+The `preview` profile ([eas.json](mobile/eas.json)) produces an installable `.apk`; EAS prints a download link. The API URL is baked in at build time and must be **HTTPS** (Android release builds block cleartext HTTP); it can still be changed in _Settings_.
+
 ### Scripted demonstration
 
 ```bash
