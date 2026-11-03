@@ -1,0 +1,340 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>FieldSync · Offline-first inspections that never lose data</title>
+    <meta
+      name="description"
+      content="FieldSync is an open-source offline-first inspection app: durable local storage, a resumable sync queue and explicit conflict resolution. React Native, NestJS, PostgreSQL."
+    />
+    <meta name="theme-color" content="#2563eb" />
+    <meta property="og:title" content="FieldSync · Offline-first inspections" />
+    <meta
+      property="og:description"
+      content="Create inspections and photo reports without a connection, then sync without losing data or silently overwriting a colleague."
+    />
+    <meta property="og:type" content="website" />
+    <link rel="icon" href="favicon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <a class="skip" href="#main">Skip to content</a>
+    <header class="nav">
+      <div class="wrap">
+        <a class="brand" href="#top"><img src="favicon.svg" alt="" width="26" height="26" />FieldSync</a>
+        <nav aria-label="Primary">
+          <a href="#features">Features</a>
+          <a href="#how">How it works</a>
+          <a href="#conflicts">Conflicts</a>
+          <a href="#stack">Stack</a>
+          <a class="btn sm" href="https://github.com/Dieu-Merci-Ndenga/fieldsync">GitHub</a>
+        </nav>
+      </div>
+    </header>
+
+    <main id="main">
+      <div class="hero" id="top">
+        <div class="wrap">
+          <div>
+            <span class="eyebrow"><span class="dot"></span>Open source · MIT</span>
+            <h1>Inspections that <em>never lose data</em>, online or not.</h1>
+            <p class="lead">
+              FieldSync lets technicians create inspections, checklists and photo reports with no connection, then
+              synchronises them without silently overwriting a colleague's work.
+            </p>
+            <div class="cta">
+              <a class="btn primary" href="https://github.com/Dieu-Merci-Ndenga/fieldsync">View on GitHub</a>
+              <a class="btn" href="#how">See how it works</a>
+            </div>
+            <div class="stats">
+              <div><b>0</b>silent overwrites</div>
+              <div><b>33</b>automated tests</div>
+              <div><b>100%</b>offline editing</div>
+            </div>
+          </div>
+          <div>
+            <div class="phone" role="img" aria-label="FieldSync app preview">
+              <div class="screen">
+                <div class="s-top">FieldSync</div>
+                <div id="banner" class="s-banner online"><span id="banner-text"></span></div>
+                <div class="s-list">
+                  <div class="s-card">
+                    <b>Pump room A</b><small>Building 2 · just now</small>
+                    <div class="tags">
+                      <span class="tag">In progress</span><span id="state" class="tag ok">Synced</span
+                      ><span class="tag">3/5 checks</span>
+                    </div>
+                  </div>
+                  <div class="s-card">
+                    <b>Boiler inspection</b><small>Plant 1 · 12 min ago</small>
+                    <div class="tags">
+                      <span class="tag ok">Completed</span><span class="tag ok">Synced</span
+                      ><span class="tag">2 photos</span>
+                    </div>
+                  </div>
+                  <div class="s-card">
+                    <b>Fire exits</b><small>Warehouse · yesterday</small>
+                    <div class="tags"><span class="tag">Draft</span><span class="tag bad">Conflict</span></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="toggle"><button id="toggle" type="button" aria-pressed="false">Go offline</button></div>
+            <p id="caption" class="caption" aria-live="polite"></p>
+          </div>
+        </div>
+      </div>
+
+      <section id="features" class="alt">
+        <div class="wrap">
+          <p class="kicker">Features</p>
+          <h2>Built for the places the network isn't.</h2>
+          <p class="sub">
+            Basements, plants, rural sites. FieldSync assumes failure and is designed so failure is never visible in
+            your data.
+          </p>
+          <div class="grid">
+            <article class="card reveal">
+              <span class="icon" aria-hidden="true"
+                ><svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  M3 7h18M3 12h18M3 17h18
+                </svg></span
+              >
+              <h3>Local-first writes</h3>
+              <p>
+                Every edit is saved to SQLite and queued before any network call. A crash or a dead zone never loses
+                work.
+              </p>
+            </article>
+            <article class="card reveal">
+              <span class="icon" aria-hidden="true"
+                ><svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  M21 12a9 9 0 1 1-3-6.7M21 4v5h-5
+                </svg></span
+              >
+              <h3>Resumable sync queue</h3>
+              <p>
+                An ordered outbox retries automatically on reconnect, with idempotent operations so replays are
+                harmless.
+              </p>
+            </article>
+            <article class="card reveal">
+              <span class="icon" aria-hidden="true"
+                ><svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  M6 3v12M18 9v12M6 15a3 3 0 1 0 0 6 3 3 0 0 0 0-6zM18 3a3 3 0 1 0 0 6 3 3 0 0 0 0-6z
+                </svg></span
+              >
+              <h3>Field-level merge</h3>
+              <p>Colleagues editing different fields merge automatically. Only real collisions need a human.</p>
+            </article>
+            <article class="card reveal">
+              <span class="icon" aria-hidden="true"
+                ><svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  M12 9v4M12 17h.01M10.3 3.9L1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z
+                </svg></span
+              >
+              <h3>Explicit conflicts</h3>
+              <p>Conflicting edits are parked, never applied silently. Choose to keep yours or theirs.</p>
+            </article>
+            <article class="card reveal">
+              <span class="icon" aria-hidden="true"
+                ><svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  M4 4h16v16H4zM4 9h16M9 9v11
+                </svg></span
+              >
+              <h3>Photos that never block</h3>
+              <p>Uploads run in their own queue. A rejected photo is parked with Retry or Remove.</p>
+            </article>
+            <article class="card reveal">
+              <span class="icon" aria-hidden="true"
+                ><svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  M12 8v4l3 2M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0z
+                </svg></span
+              >
+              <h3>Full change history</h3>
+              <p>An append-only log records author, version and whether a change was auto-merged.</p>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section id="how">
+        <div class="wrap">
+          <p class="kicker">How it works</p>
+          <h2>At-least-once delivery, exactly-once effect.</h2>
+          <p class="sub">
+            Exactly-once delivery is impossible over an unreliable network, so every operation carries a UUID and the
+            server makes replays harmless.
+          </p>
+          <div class="steps">
+            <div class="step reveal">
+              <div>
+                <h3>Write locally</h3>
+                <p>
+                  Each edit becomes an operation with a stable UUID, stored in the on-device outbox before anything
+                  touches the network.
+                </p>
+              </div>
+            </div>
+            <div class="step reveal">
+              <div>
+                <h3>Push in order</h3>
+                <p>
+                  The server locks the record, merges inside a transaction, logs the change and remembers the operation
+                  id.
+                </p>
+              </div>
+            </div>
+            <div class="step reveal">
+              <div>
+                <h3>Merge or park</h3>
+                <p>
+                  Disjoint fields merge. Identical values are accepted. Different values become a conflict for the user
+                  to decide.
+                </p>
+              </div>
+            </div>
+            <div class="step reveal">
+              <div>
+                <h3>Resume safely</h3>
+                <p>
+                  Lost responses are fine: replaying an operation returns the original result instead of applying it
+                  twice.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="conflicts" class="alt">
+        <div class="wrap">
+          <p class="kicker">Conflicts</p>
+          <h2>Two people. One field. Your call.</h2>
+          <p class="sub">
+            When two users change the same field while offline, FieldSync shows both versions side by side instead of
+            picking a winner.
+          </p>
+          <div class="conflict reveal">
+            <div class="side">
+              <h3>Mine · technician-1</h3>
+              <p>“Valve leaking, replace seal”</p>
+            </div>
+            <div class="side bad">
+              <h3>Theirs · technician-2</h3>
+              <p>“Valve OK after tightening”</p>
+            </div>
+            <div class="resolve">
+              <a class="btn primary sm" href="https://github.com/Dieu-Merci-Ndenga/fieldsync#how-synchronisation-works"
+                >Keep mine</a
+              ><a class="btn sm" href="https://github.com/Dieu-Merci-Ndenga/fieldsync#how-synchronisation-works"
+                >Keep theirs</a
+              ><span>The overwritten change is always kept in the history.</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="stack">
+        <div class="wrap">
+          <p class="kicker">Stack and quality</p>
+          <h2>Boring, proven technology. Careful engineering.</h2>
+          <table>
+            <tr>
+              <th>Mobile</th>
+              <td>React Native (Expo), TypeScript, SQLite, light and dark themes, Android APK and web build</td>
+            </tr>
+            <tr>
+              <th>API</th>
+              <td>NestJS, PostgreSQL, transactional merge with row locks, idempotency ledger</td>
+            </tr>
+            <tr>
+              <th>Security</th>
+              <td>
+                Bearer token, validated inputs, verified photo content, non-root container, fail-fast production config
+              </td>
+            </tr>
+            <tr>
+              <th>Quality</th>
+              <td>Real-PostgreSQL end-to-end tests, in-process sync simulations, CI, lint and format checks</td>
+            </tr>
+          </table>
+          <pre><span class="c"># Run the whole stack and watch a conflict happen</span>
+docker compose up -d --build
+./demo/conflict-demo.sh
+cd mobile &amp;&amp; npx expo start</pre>
+        </div>
+      </section>
+
+      <section class="alt">
+        <div class="wrap cta-box">
+          <h2>Read the code. Break the sync.</h2>
+          <p class="sub" style="margin-inline: auto">
+            Architecture, API, security model and honest limitations are all in the repository.
+          </p>
+          <div class="cta">
+            <a class="btn primary" href="https://github.com/Dieu-Merci-Ndenga/fieldsync">Star on GitHub</a>
+            <a class="btn" href="https://github.com/Dieu-Merci-Ndenga/fieldsync/blob/main/SECURITY.md"
+              >Security model</a
+            >
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer>
+      <div class="wrap">
+        <span>© 2026 FieldSync · MIT License</span>
+        <nav aria-label="Footer">
+          <a href="https://github.com/Dieu-Merci-Ndenga/fieldsync">Source</a>
+          <a href="https://github.com/Dieu-Merci-Ndenga/fieldsync/blob/main/CONTRIBUTING.md">Contributing</a>
+          <a href="https://github.com/Dieu-Merci-Ndenga/fieldsync/blob/main/SECURITY.md">Security</a>
+        </nav>
+      </div>
+    </footer>
+    <script src="script.js" defer></script>
+  </body>
+</html>

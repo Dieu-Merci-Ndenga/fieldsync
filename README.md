@@ -214,6 +214,10 @@ FieldSync is a reference implementation, not a complete field-service platform.
 - **Security:** bearer `API_TOKEN` (required in production), request validation, photo content checks, security headers, non-root container.
 - **Tooling:** CI with PostgreSQL service, oxlint, Prettier, demo script, contribution and security policies.
 
+## Landing Page
+
+A dependency-free static site lives in [site/](site). Preview it with `npx serve site`. To publish on [Render](https://render.com), create a **Blueprint** from this repository: [render.yaml](render.yaml) deploys `site/` as a static site with security headers and a strict Content-Security-Policy. No build step is needed.
+
 ## Troubleshooting
 
 | Symptom                            | Likely cause and fix                                                                                        |
