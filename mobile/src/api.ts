@@ -1,3 +1,5 @@
+import { ApiError } from './core/errors';
+import { uploadFile } from './platform/upload';
 import { Api, HistoryItem, LocalPhoto, PushResult } from './core/types';
 
 export function createApi(baseUrl: string, userId: string, token = ''): Api {
@@ -5,7 +7,7 @@ export function createApi(baseUrl: string, userId: string, token = ''): Api {
   const headers = { 'Content-Type': 'application/json', 'x-user-id': userId, ...auth };
 
   async function json<T>(res: Response): Promise<T> {
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    if (!res.ok) throw new ApiError(res.status, `HTTP ${res.status}`);
     return res.json() as Promise<T>;
   }
   const timeout = () => AbortSignal.timeout(15000);
@@ -17,15 +19,12 @@ export function createApi(baseUrl: string, userId: string, token = ''): Api {
       ),
     pull: (cursor) =>
       fetch(`${baseUrl}/sync/pull?cursor=${cursor}`, { headers, signal: timeout() }).then((r) => json(r)),
-    async uploadPhoto(p: LocalPhoto) {
-      const blob = await (await fetch(p.uri)).blob();
-      const res = await fetch(`${baseUrl}/photos/${p.id}?inspectionId=${p.inspectionId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': p.mime, 'x-user-id': userId, ...auth },
-        body: blob,
-      });
-      if (!res.ok) throw new Error(`photo upload HTTP ${res.status}`);
-    },
+    uploadPhoto: (p: LocalPhoto) =>
+      uploadFile(`${baseUrl}/photos/${p.id}?inspectionId=${p.inspectionId}`, p.uri, {
+        'Content-Type': p.mime,
+        'x-user-id': userId,
+        ...auth,
+      }),
     history: (id) =>
       fetch(`${baseUrl}/inspections/${id}/history`, { headers, signal: timeout() }).then((r) => json<HistoryItem[]>(r)),
   };

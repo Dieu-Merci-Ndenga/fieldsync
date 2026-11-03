@@ -9,7 +9,7 @@ import { loadConfig } from './config';
 export function configure(app: NestExpressApplication) {
   const { corsOrigin } = loadConfig();
   app.disable('x-powered-by');
-  if (corsOrigin) app.enableCors({ origin: corsOrigin.split(',') });
+  if (corsOrigin) app.enableCors({ origin: corsOrigin === '*' ? true : corsOrigin.split(',') });
   app.use((_req: express.Request, res: express.Response, next: express.NextFunction) => {
     res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('X-Frame-Options', 'DENY');
@@ -20,7 +20,18 @@ export function configure(app: NestExpressApplication) {
   if (process.env.NODE_ENV !== 'test') {
     const log = new Logger('HTTP');
     app.use((req: express.Request, res: express.Response, next: express.NextFunction) => {
-      res.on('finish', () => log.log(`${req.method} ${req.path} ${res.statusCode}`));
+      let reason = '';
+      const json = res.json.bind(res);
+      res.json = (body: unknown) => {
+        if (res.statusCode >= 400)
+          reason = ` ${JSON.stringify((body as { message?: unknown })?.message ?? '').slice(0, 160)}`;
+        return json(body);
+      };
+      res.on('finish', () =>
+        log.log(
+          `${req.method} ${req.path} ${res.statusCode} ${req.headers['content-type'] ?? ''} ${req.headers['content-length'] ?? ''}${reason}`,
+        ),
+      );
       next();
     });
   }

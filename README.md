@@ -22,7 +22,9 @@ FieldSync is designed around **local-first writes**, **idempotent operations** a
 - Conflict detection when two users change the same field, with _keep mine / keep theirs_ resolution.
 - Append-only change history (author, version, auto-merged flag).
 - Sync indicators: per-record `synced / pending / conflict`, global offline/syncing/error banner.
-- Idempotent photo upload with content validation.
+- Idempotent photo upload with content validation; a permanently rejected photo is parked with a Retry/Remove action and never blocks data sync.
+- Search, status and sync-state filters; soft delete and restore (with Undo) for inspections, checklist items and photos.
+- Light/dark themes, accessible controls, and a browser build for quick desktop testing.
 - Fail-fast production configuration, input validation, security headers.
 
 ## Architecture
@@ -113,6 +115,14 @@ cd mobile && npm install && npx expo start
 
 See [.env.example](.env.example) for all configuration. In the app's _Settings_ set the server URL (Android emulator `http://10.0.2.2:3000`, real device: your LAN IP), the API token, and a user name. Use a different user on a second device to produce conflicts. _Simulate offline_ forces offline mode for demos.
 
+### Browser (Expo web)
+
+```bash
+cd mobile && npx expo start --web     # http://localhost:8081
+```
+
+The web build uses `localStorage` instead of SQLite and stores photos as data URLs (quota-limited), so it is a development convenience, not a production target. The API must allow the origin (`CORS_ORIGIN=*` is the compose default for local demos). Settings are stored in the device secure store (native) or `localStorage` (web).
+
 ### Scripted demonstration
 
 ```bash
@@ -142,7 +152,7 @@ FieldSync is a reference implementation, not a complete field-service platform.
 - **Identity is not authentication:** one shared `API_TOKEN` plus an `x-user-id` label. No users, roles or per-user permissions.
 - **Per-operation resolution:** a conflict is resolved for the whole operation, not field by field.
 - **Keep mine overwrites:** it replaces the server's value for the conflicting fields (the history keeps the overwritten change).
-- **No deletes:** inspections cannot be deleted or archived.
+- **Soft deletes only:** deletion is a synced `deleted` flag (and `null` tombstones for checklist items and photos); data is never purged and photo files stay on the server.
 - **Text fields merge as whole values:** no character-level merge of notes.
 - **Schema management:** TypeORM `synchronize: true` instead of migrations.
 - **Photos:** stored on the API's local volume; no thumbnails, compression pipeline or object storage. Pulled inspections show remote photos only while online.
@@ -155,7 +165,7 @@ FieldSync is a reference implementation, not a complete field-service platform.
 ### Unreleased
 
 - **Sync:** outbox, idempotent push, field-level three-way merge, conflict resolution, change history, cursor-based pull.
-- **Mobile:** SQLite persistence, photo capture and queued upload, sync indicators, offline simulation.
+- **Mobile:** themed UI with search/filters, delete/restore with Undo, photo viewer (fit / 100%), native binary photo upload, web build, SQLite persistence, photo capture and queued upload, sync indicators, offline simulation.
 - **Security:** bearer `API_TOKEN` (required in production), request validation, photo content checks, security headers, non-root container.
 - **Tooling:** CI with PostgreSQL service, oxlint, Prettier, demo script, contribution and security policies.
 

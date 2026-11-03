@@ -26,3 +26,7 @@ Do not include real credentials or personal data. You can expect an acknowledgem
 - **Container:** the API image runs as a non-root user and exposes a health check.
 - **Data at rest on the device:** the local SQLite database is not encrypted. Do not store secrets in inspections. Use a secure store and device encryption for sensitive deployments.
 - **Transport:** serve the API over HTTPS in production.
+
+## CORS
+
+CORS is disabled unless `CORS_ORIGIN` is set. The compose file defaults it to `*` for the local browser demo only; set explicit origins (comma-separated) for any shared deployment.

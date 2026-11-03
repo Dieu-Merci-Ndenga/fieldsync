@@ -1,3 +1,4 @@
+import { ApiError } from './errors';
 import { Api, Fields, LocalInspection, OutboxOp, PhotoMeta, Store, SyncState } from './types';
 
 export type SyncStatus = 'idle' | 'syncing' | 'offline' | 'error';
@@ -6,6 +7,7 @@ export interface SyncReport {
   status: SyncStatus;
   pushed: number;
   conflicts: number;
+  photosFailed: number;
   error?: string;
 }
 
@@ -18,7 +20,7 @@ const uuid = () =>
 export class SyncEngine {
   private running: Promise<SyncReport> | null = null;
   private listeners = new Set<(r: SyncReport) => void>();
-  last: SyncReport = { status: 'idle', pushed: 0, conflicts: 0 };
+  last: SyncReport = { status: 'idle', pushed: 0, conflicts: 0, photosFailed: 0 };
 
   constructor(
     private store: Store,
@@ -71,10 +73,33 @@ export class SyncEngine {
 
   async addPhoto(inspectionId: string, uri: string, mime: string, caption = ''): Promise<string> {
     const id = uuid();
-    await this.store.addPhoto({ id, inspectionId, uri, mime, uploaded: false });
+    await this.store.addPhoto({ id, inspectionId, uri, mime, uploaded: false, error: null });
     const meta: PhotoMeta = { caption, mime };
     await this.edit(inspectionId, { [`photo:${id}`]: meta });
     return id;
+  }
+
+  // Deletions are edits too (tombstones), so they sync, merge and conflict like any other change.
+
+  deleteInspection(id: string) {
+    return this.edit(id, { deleted: true });
+  }
+
+  restoreInspection(id: string) {
+    return this.edit(id, { deleted: false });
+  }
+
+  removeChecklistItem(inspectionId: string, key: string) {
+    return this.edit(inspectionId, { [key]: null });
+  }
+
+  async removePhoto(inspectionId: string, photoId: string) {
+    await this.store.removePhoto(photoId);
+    await this.edit(inspectionId, { [`photo:${photoId}`]: null });
+  }
+
+  async retryPhoto(photoId: string) {
+    await this.store.setPhotoError(photoId, null);
   }
 
   // ---- conflict resolution ------------------------------------------------
@@ -126,17 +151,11 @@ export class SyncEngine {
     let pushed = 0;
     try {
       pushed = await this.pushOps();
-      const photoFailures = await this.uploadPhotos();
+      await this.uploadPhotos();
       await this.pull();
       const conflicts = (await this.store.listOutbox()).filter((o) => o.conflicts).length;
-      const r: SyncReport = photoFailures.length
-        ? {
-            status: 'error',
-            pushed,
-            conflicts,
-            error: `${photoFailures.length} photo(s) not uploaded yet, will retry (${photoFailures[0]})`,
-          }
-        : { status: 'idle', pushed, conflicts };
+      const photosFailed = (await this.store.listPhotos()).filter((p) => !p.uploaded && p.error).length;
+      const r: SyncReport = { status: 'idle', pushed, conflicts, photosFailed };
       this.emit(r);
       return r;
     } catch (e) {
@@ -144,6 +163,7 @@ export class SyncEngine {
         status: isNetworkError(e) ? 'offline' : 'error',
         pushed,
         conflicts: 0,
+        photosFailed: this.last.photosFailed,
         error: (e as Error).message,
       };
       this.emit(r);
@@ -193,20 +213,22 @@ export class SyncEngine {
     return applied;
   }
 
-  /** A failing photo must not block data sync: network errors abort, server errors are reported and retried later. */
-  private async uploadPhotos(): Promise<string[]> {
-    const failures: string[] = [];
+  /**
+   * A photo problem must never block data sync. Connectivity errors abort the run (retried later);
+   * permanent server rejections park the photo with an error until the user retries or removes it;
+   * transient server errors (5xx) are simply retried on the next run.
+   */
+  private async uploadPhotos() {
     for (const p of await this.store.listPhotos()) {
-      if (p.uploaded) continue;
+      if (p.uploaded || p.error) continue;
       try {
         await this.api.uploadPhoto(p);
         await this.store.markPhotoUploaded(p.id);
       } catch (e) {
-        if (isNetworkError(e)) throw e;
-        failures.push((e as Error).message);
+        if (e instanceof ApiError && e.permanent) await this.store.setPhotoError(p.id, e.message);
+        else if (!(e instanceof ApiError)) throw e;
       }
     }
-    return failures;
   }
 
   private async pull() {

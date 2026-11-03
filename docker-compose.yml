@@ -18,6 +18,8 @@ services:
       # Local demo token; override with API_TOKEN=... docker compose up
       API_TOKEN: ${API_TOKEN:-dev-token-change-me}
       UPLOAD_DIR: /data/uploads
+      # Local demo: lets the Expo web build (browser) call the API. Restrict for real deployments.
+      CORS_ORIGIN: ${CORS_ORIGIN:-*}
     ports: ['3000:3000']
     depends_on:
       db: { condition: service_healthy }

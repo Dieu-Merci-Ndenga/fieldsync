@@ -45,6 +45,8 @@ export interface LocalPhoto {
   uri: string;
   mime: string;
   uploaded: boolean;
+  /** Set when the server permanently rejected the file; not retried until the user asks. */
+  error: string | null;
 }
 
 export interface ServerInspection {
@@ -85,6 +87,8 @@ export interface Store {
   addPhoto(p: LocalPhoto): Promise<void>;
   listPhotos(inspectionId?: string): Promise<LocalPhoto[]>;
   markPhotoUploaded(id: string): Promise<void>;
+  setPhotoError(id: string, error: string | null): Promise<void>;
+  removePhoto(id: string): Promise<void>;
   getCursor(): Promise<string>;
   setCursor(c: string): Promise<void>;
 }

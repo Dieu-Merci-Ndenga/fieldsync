@@ -14,7 +14,7 @@ CREATE TABLE IF NOT EXISTS outbox (
 );
 CREATE TABLE IF NOT EXISTS photos (
   id TEXT PRIMARY KEY, inspection_id TEXT NOT NULL, uri TEXT NOT NULL,
-  mime TEXT NOT NULL, uploaded INTEGER NOT NULL DEFAULT 0
+  mime TEXT NOT NULL, uploaded INTEGER NOT NULL DEFAULT 0, error TEXT
 );
 CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
 `;
@@ -42,6 +42,8 @@ const toOp = (r: Row): OutboxOp => ({
 export async function openStore(name = 'fieldsync.db'): Promise<Store> {
   const db = await SQLite.openDatabaseAsync(name);
   await db.execAsync(SCHEMA);
+  // Migration for databases created before photos.error existed.
+  await db.execAsync('ALTER TABLE photos ADD COLUMN error TEXT').catch(() => undefined);
 
   const writeOp = (op: OutboxOp) =>
     db.runAsync(
@@ -103,7 +105,14 @@ export async function openStore(name = 'fieldsync.db'): Promise<Store> {
         uri: r.uri,
         mime: r.mime,
         uploaded: !!r.uploaded,
+        error: r.error ?? null,
       }));
+    },
+    async setPhotoError(id, error) {
+      await db.runAsync('UPDATE photos SET error = ? WHERE id = ?', error, id);
+    },
+    async removePhoto(id) {
+      await db.runAsync('DELETE FROM photos WHERE id = ?', id);
     },
     async markPhotoUploaded(id) {
       await db.runAsync('UPDATE photos SET uploaded = 1 WHERE id = ?', id);

@@ -37,7 +37,7 @@ export function PhotoViewer({ source, caption, onClose }: Props) {
     const headers = source.headers;
     const done = (w: number, h: number) => setSize({ w, h });
     const fail = () => setFailed(true);
-    if (headers) Image.getSizeWithHeaders(source.uri, headers, done, fail);
+    if (headers && Image.getSizeWithHeaders) Image.getSizeWithHeaders(source.uri, headers, done, fail);
     else Image.getSize(source.uri, done, fail);
   }, [source]);
 

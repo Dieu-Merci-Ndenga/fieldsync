@@ -5,8 +5,19 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "plugins": [
-      ["expo-image-picker", { "cameraPermission": "FieldSync needs the camera to attach inspection photos." }],
-      "expo-sqlite"
-    ]
+      [
+        "expo-image-picker",
+        {
+          "cameraPermission": "FieldSync needs the camera to attach inspection photos."
+        }
+      ],
+      "expo-sqlite",
+      "expo-secure-store"
+    ],
+    "web": {
+      "bundler": "metro",
+      "output": "single"
+    },
+    "userInterfaceStyle": "automatic"
   }
 }

@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { mergePatch } from '../../../backend/src/sync/merge';
 import { SyncEngine } from './engine';
 import { MemoryStore } from './memory';
+import { ApiError } from './errors';
 import { Api, Fields, LocalPhoto, PushResult } from './types';
 
 /** In-process fake of the NestJS server, reusing its real merge logic. */
@@ -72,28 +73,72 @@ class FakeServer {
 }
 
 describe('SyncEngine photo failures', () => {
-  it('keeps syncing data and retries when a photo upload fails with an HTTP error', async () => {
+  const setup = (failWith: () => Error | null) => {
     const server = new FakeServer();
     const store = new MemoryStore();
-    const base = server.api('alice');
-    let fail = true;
     const engine = new SyncEngine(store, {
-      ...base,
+      ...server.api('alice'),
       uploadPhoto: async () => {
-        if (fail) throw new Error('photo upload HTTP 404');
+        const e = failWith();
+        if (e) throw e;
       },
     });
+    return { server, store, engine };
+  };
+
+  it('parks a permanently rejected photo, keeps syncing data and does not retry it', async () => {
+    let calls = 0;
+    const { server, store, engine } = setup(() => (calls++, new ApiError(400, 'bad image')));
     const id = await engine.createInspection({ title: 'T' });
     await engine.addPhoto(id, 'file:///p.jpg', 'image/jpeg');
     const r = await engine.sync();
-    expect(r.status).toBe('error');
-    expect(r.error).toContain('HTTP 404');
-    expect(store.outbox.size).toBe(0);
+    expect(r).toMatchObject({ status: 'idle', photosFailed: 1 });
     expect(server.data.get(id)!.version).toBe(2);
     expect((await store.getInspection(id))!.syncState).toBe('synced');
+    await engine.sync();
+    expect(calls).toBe(1);
+    const [photo] = [...store.photos.values()];
+    await engine.retryPhoto(photo.id);
+    await engine.sync();
+    expect(calls).toBe(2);
+  });
+
+  it('retries a transient server error on the next run', async () => {
+    let fail = true;
+    const { store, engine } = setup(() => (fail ? new ApiError(503, 'unavailable') : null));
+    const id = await engine.createInspection({ title: 'T' });
+    await engine.addPhoto(id, 'file:///p.jpg', 'image/jpeg');
+    expect((await engine.sync()).photosFailed).toBe(0);
     fail = false;
-    expect((await engine.sync()).status).toBe('idle');
+    await engine.sync();
     expect([...store.photos.values()][0].uploaded).toBe(true);
+  });
+
+  it('reports offline when the upload cannot reach the server', async () => {
+    const { engine } = setup(() => new TypeError('Network request failed'));
+    const id = await engine.createInspection({ title: 'T' });
+    await engine.addPhoto(id, 'file:///p.jpg', 'image/jpeg');
+    expect((await engine.sync()).status).toBe('offline');
+  });
+});
+
+describe('SyncEngine deletes and filters', () => {
+  it('soft-deletes and restores an inspection through sync, and removes items and photos', async () => {
+    const server = new FakeServer();
+    const store = new MemoryStore();
+    const engine = new SyncEngine(store, server.api('alice'));
+    const id = await engine.createInspection({ title: 'T', 'item:a': { label: 'x', checked: false } });
+    const pid = await engine.addPhoto(id, 'file:///p.jpg', 'image/jpeg');
+    await engine.sync();
+    await engine.removeChecklistItem(id, 'item:a');
+    await engine.removePhoto(id, pid);
+    await engine.deleteInspection(id);
+    expect(store.photos.size).toBe(0);
+    await engine.sync();
+    expect(server.data.get(id)!.fields).toMatchObject({ deleted: true, 'item:a': null, [`photo:${pid}`]: null });
+    await engine.restoreInspection(id);
+    await engine.sync();
+    expect(server.data.get(id)!.fields.deleted).toBe(false);
   });
 });
 

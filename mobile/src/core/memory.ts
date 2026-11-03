@@ -37,6 +37,13 @@ export class MemoryStore implements Store {
     const p = this.photos.get(id);
     if (p) p.uploaded = true;
   }
+  async setPhotoError(id: string, error: string | null) {
+    const p = this.photos.get(id);
+    if (p) p.error = error;
+  }
+  async removePhoto(id: string) {
+    this.photos.delete(id);
+  }
   async getCursor() {
     return this.cursor;
   }

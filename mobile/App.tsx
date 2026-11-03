@@ -1,76 +1,82 @@
 import NetInfo from '@react-native-community/netinfo';
-import * as ImagePicker from 'expo-image-picker';
 import { StatusBar } from 'expo-status-bar';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import {
-  Alert,
-  Button,
-  FlatList,
-  Image,
-  Pressable,
-  SafeAreaView,
-  ScrollView,
-  StyleSheet,
-  Switch,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
-} from 'react-native';
+import { Modal, Switch, Text, View } from 'react-native';
+import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { createApi } from './src/api';
 import { SyncEngine, SyncReport } from './src/core/engine';
-import { ChecklistItem, HistoryItem, LocalInspection, LocalPhoto, OutboxOp, Store } from './src/core/types';
+import { LocalInspection, LocalPhoto, OutboxOp, Store } from './src/core/types';
 import { openStore } from './src/db/sqliteStore';
-import { PhotoSource, PhotoViewer } from './src/ui/PhotoViewer';
+import { loadSettings, saveSettings } from './src/platform/settings';
+import { space, useTheme } from './src/theme';
+import { Banner, Button, Card, Field, IconButton, Label, Snackbar } from './src/ui/components';
+import { InspectionDetail } from './src/ui/InspectionDetail';
+import { InspectionList } from './src/ui/InspectionList';
 
-const DEFAULT_URL = process.env.EXPO_PUBLIC_API_URL ?? 'http://10.0.2.2:3000';
-const STATUSES = ['draft', 'in_progress', 'completed'];
-const COLORS = { synced: '#2e7d32', pending: '#ef6c00', conflict: '#c62828' } as const;
+const DEFAULTS = {
+  url: process.env.EXPO_PUBLIC_API_URL ?? 'http://10.0.2.2:3000',
+  user: 'technician-1',
+  token: process.env.EXPO_PUBLIC_API_TOKEN ?? '',
+};
 
 export default function App() {
+  return (
+    <SafeAreaProvider>
+      <Root />
+    </SafeAreaProvider>
+  );
+}
+
+function Root() {
+  const t = useTheme();
   const [store, setStore] = useState<Store | null>(null);
-  const [url, setUrl] = useState(DEFAULT_URL);
-  const [user, setUser] = useState('technician-1');
-  const [token, setToken] = useState(process.env.EXPO_PUBLIC_API_TOKEN ?? '');
+  const [settings, setSettings] = useState<typeof DEFAULTS | null>(null);
   const [online, setOnline] = useState(true);
-  const [report, setReport] = useState<SyncReport>({ status: 'idle', pushed: 0, conflicts: 0 });
+  const [report, setReport] = useState<SyncReport>({ status: 'idle', pushed: 0, conflicts: 0, photosFailed: 0 });
   const [items, setItems] = useState<LocalInspection[]>([]);
-  const [pending, setPending] = useState(0);
+  const [outbox, setOutbox] = useState<OutboxOp[]>([]);
+  const [photos, setPhotos] = useState<LocalPhoto[]>([]);
   const [openId, setOpenId] = useState<string | null>(null);
   const [showSettings, setShowSettings] = useState(false);
   const [simulateOffline, setSimulateOffline] = useState(false);
+  const [dismissed, setDismissed] = useState<string | null>(null);
+  const [undo, setUndo] = useState<string | null>(null);
+  const undoTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const simOffline = useRef(false);
+  simOffline.current = simulateOffline;
 
   useEffect(() => {
     openStore().then(setStore);
+    loadSettings(DEFAULTS).then(setSettings);
   }, []);
 
   const engine = useMemo(() => {
-    if (!store) return null;
-    const api = createApi(url, user, token);
+    if (!store || !settings) return null;
+    const api = createApi(settings.url, settings.user, settings.token);
     // Demo switch: force "offline" without touching the device network.
     const guarded = new Proxy(api, {
       get:
-        (t, k) =>
+        (target, k) =>
         (...a: unknown[]) =>
           simOffline.current
             ? Promise.reject(new TypeError('Network request failed (simulated)'))
-            : (t as any)[k](...a),
+            : (target as any)[k](...a),
     });
     return new SyncEngine(store, guarded);
-  }, [store, url, user, token]);
-  const simOffline = useRef(false);
-  simOffline.current = simulateOffline;
+  }, [store, settings]);
 
   const reload = useCallback(async () => {
     if (!store) return;
     setItems(await store.listInspections());
-    setPending((await store.listOutbox()).length);
+    setOutbox(await store.listOutbox());
+    setPhotos(await store.listPhotos());
   }, [store]);
 
   useEffect(() => {
     reload();
   }, [reload]);
-  useEffect(() => NetInfo.addEventListener((s) => setOnline(!!s.isConnected)), []);
+  useEffect(() => NetInfo.addEventListener((s) => setOnline(s.isConnected !== false)), []);
+  useEffect(() => engine?.subscribe(setReport), [engine]);
 
   const sync = useCallback(async () => {
     if (engine) {
@@ -79,70 +85,147 @@ export default function App() {
     }
   }, [engine, reload]);
 
-  useEffect(() => engine?.subscribe(setReport), [engine]);
-  // Auto-sync: on start, on reconnect, and with a retry timer while work is pending.
+  // Auto-sync: on start, on reconnect, and with a retry timer while online.
   useEffect(() => {
     if (online && !simulateOffline) sync();
-  }, [online, simulateOffline, sync]);
-  useEffect(() => {
-    const t = setInterval(() => {
-      if (online && !simulateOffline) sync();
-    }, 15000);
-    return () => clearInterval(t);
+    const timer = setInterval(() => online && !simOffline.current && sync(), 15000);
+    return () => clearInterval(timer);
   }, [online, simulateOffline, sync]);
 
-  if (!store || !engine)
+  if (!store || !engine || !settings)
     return (
-      <SafeAreaView style={s.screen}>
-        <Text style={s.pad}>Opening local database…</Text>
+      <SafeAreaView style={{ flex: 1, backgroundColor: t.bg, alignItems: 'center', justifyContent: 'center' }}>
+        <Text style={{ color: t.muted }}>Opening local database…</Text>
       </SafeAreaView>
     );
 
   const offline = !online || simulateOffline || report.status === 'offline';
+  const pending = outbox.length;
+  const errorKey = report.status === 'error' ? (report.error ?? 'error') : null;
+
   const banner = offline
-    ? '● Offline — changes are saved locally'
+    ? {
+        tone: 'neutral' as const,
+        icon: 'cloud-offline-outline' as const,
+        text: pending
+          ? `Offline · ${pending} change(s) saved on this device`
+          : 'Offline · changes are saved on this device',
+      }
     : report.status === 'syncing'
-      ? '↻ Syncing…'
-      : report.status === 'error'
-        ? `⚠ Sync error: ${report.error}`
-        : pending
-          ? `${pending} change(s) waiting to sync`
-          : '✓ All changes synced';
+      ? { tone: 'primary' as const, icon: 'sync' as const, text: 'Syncing…', busy: true }
+      : errorKey && dismissed !== errorKey
+        ? {
+            tone: 'danger' as const,
+            icon: 'alert-circle-outline' as const,
+            text: `Sync problem: ${report.error}`,
+            retry: true,
+          }
+        : report.photosFailed
+          ? {
+              tone: 'warning' as const,
+              icon: 'image-outline' as const,
+              text: `${report.photosFailed} photo(s) could not be uploaded. Open the inspection to retry.`,
+            }
+          : report.conflicts
+            ? {
+                tone: 'danger' as const,
+                icon: 'git-compare-outline' as const,
+                text: `${report.conflicts} conflict(s) need your decision`,
+              }
+            : pending
+              ? {
+                  tone: 'warning' as const,
+                  icon: 'time-outline' as const,
+                  text: `${pending} change(s) waiting to sync`,
+                  retry: true,
+                }
+              : { tone: 'success' as const, icon: 'checkmark-circle-outline' as const, text: 'All changes synced' };
+
+  const doDelete = async (id: string) => {
+    await engine.deleteInspection(id);
+    setOpenId(null);
+    setUndo(id);
+    clearTimeout(undoTimer.current);
+    undoTimer.current = setTimeout(() => setUndo(null), 6000);
+    await reload();
+  };
+  const doRestore = async (id: string) => {
+    await engine.restoreInspection(id);
+    setUndo(null);
+    await reload();
+  };
+
+  const auth: Record<string, string> = {
+    'x-user-id': settings.user,
+    ...(settings.token ? { Authorization: `Bearer ${settings.token}` } : {}),
+  };
 
   return (
-    <SafeAreaView style={s.screen}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: t.bg }}>
       <StatusBar style="auto" />
-      <View
-        style={[
-          s.banner,
-          { backgroundColor: offline ? '#555' : report.status === 'error' ? COLORS.conflict : COLORS.synced },
-        ]}
-      >
-        <Text style={s.bannerText}>{banner}</Text>
-        <Button title="Sync now" color="#fff" onPress={sync} />
-      </View>
-      {openId ? (
-        <Detail
-          id={openId}
-          store={store}
-          engine={engine}
-          api={createApi(url, user, token)}
-          url={url}
-          auth={{ 'x-user-id': user, ...(token ? { Authorization: `Bearer ${token}` } : {}) }}
-          online={!offline}
-          onChange={reload}
-          onBack={() => {
-            setOpenId(null);
-            reload();
-          }}
+      <View style={{ flex: 1, width: '100%', maxWidth: 760, alignSelf: 'center' }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: space.lg, paddingTop: space.sm }}>
+          <Text accessibilityRole="header" style={{ flex: 1, color: t.text, fontSize: 26, fontWeight: '800' }}>
+            FieldSync
+          </Text>
+          <IconButton icon="sync-outline" label="Sync now" onPress={sync} />
+          <IconButton icon="settings-outline" label="Settings" onPress={() => setShowSettings(true)} />
+        </View>
+        <Banner
+          tone={banner.tone}
+          icon={banner.icon}
+          text={banner.text}
+          busy={'busy' in banner ? banner.busy : false}
+          action={
+            'retry' in banner
+              ? {
+                  label: banner.tone === 'danger' ? 'Dismiss' : 'Sync now',
+                  onPress: banner.tone === 'danger' ? () => setDismissed(errorKey) : sync,
+                }
+              : undefined
+          }
         />
-      ) : (
-        <View style={{ flex: 1 }}>
-          <View style={s.row}>
-            <Text style={s.h1}>Inspections</Text>
-            <Button title="Settings" onPress={() => setShowSettings(!showSettings)} />
+        {openId ? (
+          <InspectionDetail
+            id={openId}
+            store={store}
+            engine={engine}
+            api={createApi(settings.url, settings.user, settings.token)}
+            url={settings.url}
+            auth={auth}
+            online={!offline}
+            onChange={reload}
+            onBack={() => {
+              setOpenId(null);
+              reload();
+            }}
+            onDelete={doDelete}
+          />
+        ) : (
+          <InspectionList
+            items={items}
+            outbox={outbox}
+            photos={photos}
+            onOpen={setOpenId}
+            onDelete={doDelete}
+            onRestore={doRestore}
+            onCreate={async () => {
+              const id = await engine.createInspection({
+                title: 'New inspection',
+                location: '',
+                status: 'draft',
+                notes: '',
+              });
+              await reload();
+              setOpenId(id);
+            }}
+          />
+        )}
+        {!openId && (
+          <View style={{ position: 'absolute', right: space.lg, bottom: space.xl + (undo ? 64 : 0) }}>
             <Button
-              title="+ New"
+              label="New inspection"
+              icon="add"
               onPress={async () => {
                 const id = await engine.createInspection({
                   title: 'New inspection',
@@ -155,287 +238,64 @@ export default function App() {
               }}
             />
           </View>
-          {showSettings && (
-            <View style={s.card}>
-              <Text>Server URL</Text>
-              <TextInput style={s.input} value={url} onChangeText={setUrl} autoCapitalize="none" />
-              <Text>User</Text>
-              <TextInput style={s.input} value={user} onChangeText={setUser} autoCapitalize="none" />
-              <Text>API token</Text>
-              <TextInput style={s.input} value={token} onChangeText={setToken} autoCapitalize="none" secureTextEntry />
-              <View style={s.row}>
-                <Text>Simulate offline</Text>
+        )}
+        {undo && <Snackbar message="Inspection deleted" actionLabel="Undo" onAction={() => doRestore(undo)} />}
+      </View>
+
+      <Modal visible={showSettings} transparent animationType="slide" onRequestClose={() => setShowSettings(false)}>
+        <View style={{ flex: 1, backgroundColor: t.overlay, justifyContent: 'flex-end' }}>
+          <View
+            style={{
+              backgroundColor: t.bg,
+              padding: space.lg,
+              gap: space.md,
+              maxWidth: 760,
+              width: '100%',
+              alignSelf: 'center',
+              borderTopLeftRadius: 20,
+              borderTopRightRadius: 20,
+            }}
+          >
+            <Text style={{ color: t.text, fontSize: 20, fontWeight: '800' }}>Settings</Text>
+            <SettingsForm
+              initial={settings}
+              onSave={(s) => {
+                setSettings(s);
+                saveSettings(s);
+                setShowSettings(false);
+              }}
+            />
+            <Card>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm }}>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ color: t.text, fontWeight: '600' }}>Simulate offline</Text>
+                  <Text style={{ color: t.muted, fontSize: 12 }}>
+                    Demo switch: blocks sync without touching your network.
+                  </Text>
+                </View>
                 <Switch value={simulateOffline} onValueChange={setSimulateOffline} />
               </View>
-            </View>
-          )}
-          <FlatList
-            data={items}
-            keyExtractor={(i) => i.id}
-            ListEmptyComponent={<Text style={s.pad}>No inspections yet.</Text>}
-            renderItem={({ item }) => (
-              <TouchableOpacity style={s.card} onPress={() => setOpenId(item.id)}>
-                <Text style={s.title}>{String(item.fields.title ?? 'Untitled')}</Text>
-                <Text>
-                  {String(item.fields.location ?? '')} · {String(item.fields.status ?? '')}
-                </Text>
-                <Text style={{ color: COLORS[item.syncState], fontWeight: '600' }}>● {item.syncState}</Text>
-              </TouchableOpacity>
-            )}
-          />
+            </Card>
+            <Button label="Close" variant="ghost" onPress={() => setShowSettings(false)} />
+          </View>
         </View>
-      )}
+      </Modal>
     </SafeAreaView>
   );
 }
 
-function Detail(props: {
-  id: string;
-  store: Store;
-  engine: SyncEngine;
-  api: ReturnType<typeof createApi>;
-  url: string;
-  auth: Record<string, string>;
-  online: boolean;
-  onChange: () => void;
-  onBack: () => void;
-}) {
-  const { id, store, engine, api, url, auth, online, onChange, onBack } = props;
-  const [viewer, setViewer] = useState<PhotoSource | null>(null);
-  const [insp, setInsp] = useState<LocalInspection | null>(null);
-  const [photos, setPhotos] = useState<LocalPhoto[]>([]);
-  const [ops, setOps] = useState<OutboxOp[]>([]);
-  const [history, setHistory] = useState<HistoryItem[] | null>(null);
-  const [newItem, setNewItem] = useState('');
-
-  const load = useCallback(async () => {
-    setInsp(await store.getInspection(id));
-    setPhotos(await store.listPhotos(id));
-    setOps((await store.listOutbox()).filter((o) => o.inspectionId === id));
-    onChange();
-  }, [store, id, onChange]);
-  useEffect(() => {
-    load();
-  }, [load]);
-  useEffect(
-    () =>
-      engine.subscribe(() => {
-        load();
-      }),
-    [engine, load],
-  );
-
-  if (!insp) return null;
-  const f = insp.fields;
-  const edit = async (patch: Record<string, unknown>) => {
-    await engine.edit(id, patch);
-    await load();
-  };
-  const checklist = Object.entries(f).filter(([k]) => k.startsWith('item:')) as [string, ChecklistItem][];
-  const photoIds = Object.keys(f)
-    .filter((k) => k.startsWith('photo:'))
-    .map((k) => k.slice(6));
-  const conflictOps = ops.filter((o) => o.conflicts);
-
-  const pick = async (camera: boolean) => {
-    const perm = camera
-      ? await ImagePicker.requestCameraPermissionsAsync()
-      : await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!perm.granted) return Alert.alert('Permission required');
-    const res = await (camera ? ImagePicker.launchCameraAsync : ImagePicker.launchImageLibraryAsync)({
-      quality: 0.6,
-      mediaTypes: ['images'],
-    });
-    if (res.canceled) return;
-    const a = res.assets[0];
-    await engine.addPhoto(id, a.uri, a.mimeType === 'image/png' ? 'image/png' : 'image/jpeg');
-    load();
-  };
-
-  const loadHistory = async () => {
-    try {
-      setHistory(await api.history(id));
-    } catch {
-      Alert.alert('History unavailable offline');
-    }
-  };
-
+function SettingsForm({ initial, onSave }: { initial: typeof DEFAULTS; onSave: (s: typeof DEFAULTS) => void }) {
+  const s = useRef(initial);
+  const set = (patch: Partial<typeof DEFAULTS>) => (s.current = { ...s.current, ...patch });
   return (
-    <ScrollView contentContainerStyle={s.pad}>
-      <Button title="← Back" onPress={onBack} />
-      <Text style={{ color: COLORS[insp.syncState], fontWeight: '600' }}>
-        ● {insp.syncState} (server v{insp.baseVersion}, {ops.length} queued)
-      </Text>
-
-      {conflictOps.map((op) => (
-        <View key={op.opId} style={[s.card, { borderColor: COLORS.conflict, borderWidth: 2 }]}>
-          <Text style={s.title}>Conflict — a colleague changed the same data</Text>
-          {op.conflicts!.map((c) => (
-            <Text key={c.field}>
-              {label(c.field)}: mine “{show(c.mine)}” vs theirs “{show(c.theirs)}”
-            </Text>
-          ))}
-          <View style={s.row}>
-            <Button
-              title="Keep mine"
-              onPress={async () => {
-                await engine.resolveKeepMine(op.opId);
-                await engine.sync();
-                load();
-              }}
-            />
-            <Button
-              title="Keep theirs"
-              onPress={async () => {
-                await engine.resolveKeepTheirs(op.opId);
-                await engine.sync();
-                load();
-              }}
-            />
-          </View>
-        </View>
-      ))}
-      {ops
-        .filter((o) => !o.conflicts && o.lastError)
-        .map((o) => (
-          <Text key={o.opId} style={{ color: COLORS.conflict }}>
-            Error: {o.lastError}
-          </Text>
-        ))}
-
-      <Text style={s.label}>Title</Text>
-      <TextInput
-        style={s.input}
-        defaultValue={String(f.title ?? '')}
-        onEndEditing={(e) => edit({ title: e.nativeEvent.text })}
-      />
-      <Text style={s.label}>Location</Text>
-      <TextInput
-        style={s.input}
-        defaultValue={String(f.location ?? '')}
-        onEndEditing={(e) => edit({ location: e.nativeEvent.text })}
-      />
-      <Text style={s.label}>Status: {String(f.status)}</Text>
-      <View style={s.row}>
-        {STATUSES.map((st) => (
-          <Button key={st} title={st} onPress={() => edit({ status: st })} />
-        ))}
-      </View>
-      <Text style={s.label}>Notes / report</Text>
-      <TextInput
-        style={[s.input, { height: 90 }]}
-        multiline
-        defaultValue={String(f.notes ?? '')}
-        onEndEditing={(e) => edit({ notes: e.nativeEvent.text })}
-      />
-
-      <Text style={s.h1}>Checklist</Text>
-      {checklist.map(([k, it]) => (
-        <View key={k} style={s.row}>
-          <Switch value={it.checked} onValueChange={(v) => edit({ [k]: { ...it, checked: v } })} />
-          <Text style={{ flex: 1 }}>{it.label}</Text>
-        </View>
-      ))}
-      <View style={s.row}>
-        <TextInput
-          style={[s.input, { flex: 1 }]}
-          placeholder="New check item"
-          value={newItem}
-          onChangeText={setNewItem}
-        />
-        <Button
-          title="Add"
-          onPress={() => {
-            if (!newItem.trim()) return;
-            edit({
-              [`item:${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`]: {
-                label: newItem.trim(),
-                checked: false,
-              },
-            });
-            setNewItem('');
-          }}
-        />
-      </View>
-
-      <Text style={s.h1}>Photos</Text>
-      <View style={s.row}>
-        <Button title="Camera" onPress={() => pick(true)} />
-        <Button title="Library" onPress={() => pick(false)} />
-      </View>
-      <View style={s.row}>
-        {photoIds.map((pid) => {
-          const local = photos.find((p) => p.id === pid);
-          const source: PhotoSource | null = local
-            ? { uri: local.uri }
-            : online
-              ? { uri: `${url}/photos/${pid}`, headers: auth }
-              : null;
-          return (
-            <View key={pid}>
-              {source ? (
-                <Pressable
-                  accessibilityRole="imagebutton"
-                  accessibilityLabel="Open photo full screen"
-                  onPress={() => setViewer(source)}
-                >
-                  <Image source={source} style={s.photo} />
-                </Pressable>
-              ) : (
-                <View style={[s.photo, { backgroundColor: '#ccc' }]} />
-              )}
-              <Text style={{ fontSize: 11 }}>
-                {local ? (local.uploaded ? 'uploaded' : 'waiting upload') : 'remote'}
-              </Text>
-            </View>
-          );
-        })}
-      </View>
-
-      <PhotoViewer source={viewer} onClose={() => setViewer(null)} />
-
-      <Text style={s.h1}>History</Text>
-      <Button title="Load change history" onPress={loadHistory} />
-      {ops.map((o) => (
-        <Text key={o.opId}>⏳ (local) {Object.keys(o.patch).map(label).join(', ')}</Text>
-      ))}
-      {history?.map((h) => (
-        <Text key={h.id}>
-          v{h.version} · {h.userId} · {new Date(h.createdAt).toLocaleString()} ·{' '}
-          {Object.keys(h.changes).map(label).join(', ')}
-          {h.merged ? ' (auto-merged)' : ''}
-        </Text>
-      ))}
-    </ScrollView>
+    <Card>
+      <Label>Server URL</Label>
+      <Field value={initial.url} onCommit={(url) => set({ url })} autoCapitalize="none" autoCorrect={false} />
+      <Label>User</Label>
+      <Field value={initial.user} onCommit={(user) => set({ user })} autoCapitalize="none" autoCorrect={false} />
+      <Label>API token</Label>
+      <Field value={initial.token} onCommit={(token) => set({ token })} autoCapitalize="none" secureTextEntry />
+      <Button label="Save and sync" icon="save-outline" onPress={() => setTimeout(() => onSave(s.current), 700)} />
+    </Card>
   );
 }
-
-const label = (k: string) => (k.startsWith('item:') ? 'checklist item' : k.startsWith('photo:') ? 'photo' : k);
-const show = (v: unknown) => (typeof v === 'object' ? JSON.stringify(v) : String(v ?? ''));
-
-const s = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: '#f5f5f5' },
-  pad: { padding: 16, gap: 8 },
-  banner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-  },
-  bannerText: { color: '#fff', flex: 1, fontWeight: '600' },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 8,
-    padding: 4,
-    flexWrap: 'wrap',
-  },
-  h1: { fontSize: 20, fontWeight: '700', marginTop: 8 },
-  title: { fontSize: 16, fontWeight: '700' },
-  label: { fontWeight: '600', marginTop: 6 },
-  card: { backgroundColor: '#fff', margin: 8, padding: 12, borderRadius: 8, gap: 4 },
-  input: { backgroundColor: '#fff', borderWidth: 1, borderColor: '#ccc', borderRadius: 6, padding: 8 },
-  photo: { width: 90, height: 90, borderRadius: 6 },
-});
