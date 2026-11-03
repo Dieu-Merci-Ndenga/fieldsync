@@ -8,7 +8,7 @@ FieldSync lets technicians create inspections, checklists and photo reports with
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 <p align="center">
-  <a href="https://github.com/Dieu-Merci-Ndenga/fieldsync">
+  <a href="https://fieldsync-site.onrender.com">
     <img src="mobile/src/img/FieldSync_OpenGraph.png" alt="Relay - Event-Driven Webhook Engine" width="100%">
   </a>
 </p>
